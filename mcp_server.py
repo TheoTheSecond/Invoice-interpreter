@@ -1,18 +1,32 @@
+import sys
+
 from mcp.server import MCPServer
 from sqlmodel import Session, select
 
 from database import engine
 from models import Invoice, InvoiceLine
 
+from datetime import datetime
+
+def log_tool(message: str):
+    with open("mcp_debug.log", "a", encoding="utf-8") as file:
+        file.write(
+            f"{datetime.now()} - {message}\n"
+        )
 
 mcp = MCPServer("Invoice database")
+
+
+
 
 """
 Search invoices by filename, supplier or invoice number.
 """
 @mcp.tool()
 def search_invoices(query: str) -> list[dict]:
-
+    log_tool(
+        f"search_invoices(query={query})"
+    )
     q = query.lower()
 
     with Session(engine) as session:
@@ -48,7 +62,9 @@ def search_invoices(query: str) -> list[dict]:
     """
 @mcp.tool()
 def get_invoice(invoice_id: int) -> dict:
-
+    log_tool(
+        f"get_invoice(invoice_id={invoice_id})"
+    )
     with Session(engine) as session:
         invoice = session.get(Invoice, invoice_id)
 
@@ -76,7 +92,9 @@ def get_invoice(invoice_id: int) -> dict:
     """
 @mcp.tool()
 def get_supplier_total(supplier: str) -> dict:
-
+    log_tool(
+        f"get_supplier_total(supplier={supplier})"
+    )
     with Session(engine) as session:
         invoices = session.exec(
             select(Invoice)
