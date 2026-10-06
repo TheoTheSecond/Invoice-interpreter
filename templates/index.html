@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="sv">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width" name="viewport">
+    <title>Invoice AI v0.1</title>
+    <link href="/static/style.css" rel="stylesheet">
+</head>
+<body>
+<main>
+    <header><h1>Frontend <small>v0.1</small></h1><label class="upload">Ladda upp XML <input accept=".xml" id="files"
+                                                                                              multiple
+                                                                                              type="file"></label>
+    </header>
+    <section class="grid">
+        <aside><input id="search" placeholder="Sök filnamn, leverantör eller fakturanr">
+            <div id="list"></div>
+        </aside>
+        <article id="detail"><p>Välj eller ladda upp en faktura.</p></article>
+    </section>
+    <section class="chat"><h2>Fråga AI</h2>
+        <div class="ask"><input id="question" placeholder="">
+            <button id="ask">Fråga</button>
+        </div>
+        <pre id="answer"></pre>
+    </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>

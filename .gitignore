@@ -1,0 +1,13 @@
+
+/shelf/
+/workspace.xml
+/httpRequests/
+/dataSources/
+/dataSources.local.xml
+.env
+.env.example
+__pycache__/
+*.pyc
+.venv/
+invoices.db
+.idea/

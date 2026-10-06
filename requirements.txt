@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+sqlmodel
+python-multipart
+jinja2
+mcp>=2,<3
+openai
+python-dotenv

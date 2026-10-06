@@ -1,0 +1,49 @@
+import json, os
+from openai import OpenAI
+from sqlmodel import Session, select
+from database import engine
+from models import Invoice, InvoiceLine
+
+# v0.1 keeps orchestration deliberately tiny. The same read operations are exposed
+# as MCP tools in mcp_server.py. The web chat uses them as OpenAI function tools.
+
+def _search(query):
+    q=query.lower()
+    with Session(engine) as s:
+        rows=s.exec(select(Invoice)).all()
+        return [{"id":i.id,"filename":i.filename,"supplier":i.supplier,"invoice_number":i.invoice_number,"total_amount":i.total_amount}
+                for i in rows if q in " ".join(filter(None,[i.filename,i.supplier,i.invoice_number])).lower()]
+
+def _invoice(invoice_id):
+    with Session(engine) as s:
+        i=s.get(Invoice, invoice_id)
+        if not i:return {"error":"Invoice not found"}
+        ls=s.exec(select(InvoiceLine).where(InvoiceLine.invoice_id==invoice_id)).all()
+        return {"invoice":i.model_dump(exclude={"raw_xml"}),"lines":[x.model_dump() for x in ls]}
+
+def _supplier_total(supplier):
+    with Session(engine) as s:
+        rows=s.exec(select(Invoice)).all(); m=[i for i in rows if i.supplier and supplier.lower() in i.supplier.lower()]
+        return {"supplier":supplier,"invoice_count":len(m),"total":sum(i.total_amount or 0 for i in m)}
+
+TOOLS=[
+ {"type":"function","name":"search_invoices","description":"Search invoices by filename, supplier or invoice number.","parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"],"additionalProperties":False}},
+ {"type":"function","name":"get_invoice","description":"Get an invoice and its rows.","parameters":{"type":"object","properties":{"invoice_id":{"type":"integer"}},"required":["invoice_id"],"additionalProperties":False}},
+ {"type":"function","name":"get_supplier_total","description":"Calculate total amount for a supplier.","parameters":{"type":"object","properties":{"supplier":{"type":"string"}},"required":["supplier"],"additionalProperties":False}}
+]
+FUNCS={"search_invoices":lambda a:_search(a["query"]),"get_invoice":lambda a:_invoice(a["invoice_id"]),"get_supplier_total":lambda a:_supplier_total(a["supplier"])}
+
+def ask(question:str):
+    if not os.getenv("OPENAI_API_KEY"):
+        return "OPENAI_API_KEY saknas. Lägg den i .env för att aktivera AI-chatten."
+    c=OpenAI(); model=os.getenv("OPENAI_MODEL","gpt-6-luna")
+    r=c.responses.create(model=model,instructions="Du är en fakturaassistent. Använd verktygen när svaret kräver fakturadata. Svara kort på svenska.",input=question,tools=TOOLS)
+    for _ in range(5):
+        calls=[x for x in r.output if getattr(x,"type",None)=="function_call"]
+        if not calls:return r.output_text
+        outputs=[]
+        for call in calls:
+            result=FUNCS[call.name](json.loads(call.arguments))
+            outputs.append({"type":"function_call_output","call_id":call.call_id,"output":json.dumps(result,ensure_ascii=False)})
+        r=c.responses.create(model=model,instructions="Svara på svenska utifrån verktygsresultaten.",previous_response_id=r.id,input=outputs,tools=TOOLS)
+    return r.output_text
