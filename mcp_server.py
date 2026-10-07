@@ -42,7 +42,7 @@ def get_invoice(invoice_id: int) -> dict:
     """
     log_tool(f"get_invoice(invoice_id={invoice_id})")
 
-    return repository.get_invoice(invoice_id)
+    return repository.find_invoice_by_number(invoice_id)
 
 
 @mcp.tool()
@@ -91,7 +91,7 @@ def get_invoice_summary() -> dict:
     """
     log_tool("get_invoice_summary()")
 
-    return repository.get_invoice_summary()
+    return repository.invoice_summary()
 
 @mcp.tool()
 def get_invoice_statistics() -> dict:
@@ -111,7 +111,7 @@ def get_most_expensive_invoice() -> dict | None:
     """
     log_tool("get_most_expensive_invoice()")
 
-    return repository.get_most_expensive_invoice()
+    return repository.analyze_invoices("highest_total")
 
 
 @mcp.tool()
@@ -121,6 +121,6 @@ def get_cheapest_invoice() -> dict | None:
     """
     log_tool("get_cheapest_invoice()")
 
-    return repository.get_cheapest_invoice()
+    return repository.analyze_invoices("lowest_total")
 if __name__ == "__main__":
     mcp.run()

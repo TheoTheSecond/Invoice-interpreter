@@ -1,69 +1,176 @@
+import asyncio
+import json
 import os
 import sys
-from contextlib import AsyncExitStack
+from typing import Any
 
-from google import genai
+import anthropic
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
-client = None
-mcp_session = None
-exit_stack = None
+MAX_TOOL_ROUNDS = 10
 
 
-async def startup():
-    global client, mcp_session, exit_stack
+def mcp_result_to_text(result: Any) -> str:
+    """Convert an MCP CallToolResult into text Claude can read."""
+    parts: list[str] = []
 
-    api_key = os.getenv("GEMINI_API_KEY")
+    for content in result.content:
+        text = getattr(content, "text", None)
+
+        if text is not None:
+            parts.append(text)
+            continue
+
+        if hasattr(content, "model_dump"):
+            parts.append(
+                json.dumps(
+                    content.model_dump(mode="json"),
+                    ensure_ascii=False,
+                )
+            )
+        else:
+            parts.append(str(content))
+
+    if parts:
+        return "\n".join(parts)
+
+    if hasattr(result, "model_dump"):
+        return json.dumps(
+            result.model_dump(mode="json"),
+            ensure_ascii=False,
+        )
+
+    return str(result)
+
+
+def get_text_response(response: Any) -> str:
+    """Extract normal text blocks from an Anthropic response."""
+    text_parts = [
+        block.text
+        for block in response.content
+        if getattr(block, "type", None) == "text"
+    ]
+
+    return "\n".join(text_parts).strip()
+
+
+async def ask_async(question: str) -> str:
+    api_key = os.getenv("ANTHROPIC_API_KEY")
 
     if not api_key:
-        raise RuntimeError("GEMINI_API_KEY saknas.")
+        return "ANTHROPIC_API_KEY saknas."
 
-    client = genai.Client(api_key=api_key)
+    anthropic_client = anthropic.AsyncAnthropic(api_key=api_key)
 
     server_params = StdioServerParameters(
         command=sys.executable,
         args=["mcp_server.py"],
     )
 
-    exit_stack = AsyncExitStack()
+    async with stdio_client(server_params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
 
-    read, write = await exit_stack.enter_async_context(
-        stdio_client(server_params)
-    )
+            mcp_tools_result = await session.list_tools()
 
-    mcp_session = await exit_stack.enter_async_context(
-        ClientSession(read, write)
-    )
+            anthropic_tools = [
+                {
+                    "name": tool.name,
+                    "description": tool.description or "",
+                    "input_schema": tool.input_schema,
+                }
+                for tool in mcp_tools_result.tools
+            ]
 
-    await mcp_session.initialize()
+            messages: list[dict[str, Any]] = [
+                {
+                    "role": "user",
+                    "content": question,
+                }
+            ]
+
+            for _ in range(MAX_TOOL_ROUNDS):
+                response = await anthropic_client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=1024,
+                    system=(
+                        "You are an invoice assistant. "
+                        "Answer in Swedish. "
+                        "Use the available invoice tools when the answer "
+                        "requires invoice data. "
+                        "Use analytics tools for comparisons, totals, counts, "
+                        "earliest dates, and latest dates. "
+                        "Do not repeatedly call the same tool with the same "
+                        "arguments."
+                    ),
+                    tools=anthropic_tools,
+                    messages=messages,
+                )
+
+                if response.stop_reason != "tool_use":
+                    return get_text_response(response)
+
+                assistant_content = [
+                    block.model_dump()
+                    for block in response.content
+                ]
+
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": assistant_content,
+                    }
+                )
+
+                tool_results: list[dict[str, Any]] = []
+
+                for block in response.content:
+                    if block.type != "tool_use":
+                        continue
+
+                    try:
+                        result = await session.call_tool(
+                            block.name,
+                            arguments=block.input,
+                        )
+
+                        tool_results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": block.id,
+                                "content": mcp_result_to_text(result),
+                                "is_error": bool(
+                                    getattr(result, "isError", False)
+                                ),
+                            }
+                        )
+                    except Exception as exc:
+                        tool_results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": block.id,
+                                "content": f"Tool error: {exc}",
+                                "is_error": True,
+                            }
+                        )
+
+                if not tool_results:
+                    return get_text_response(response)
+
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": tool_results,
+                    }
+                )
+
+            return (
+                "Jag kunde inte slutföra frågan inom det tillåtna antalet "
+                "verktygsanrop."
+            )
 
 
-async def shutdown():
-    global client, mcp_session, exit_stack
-
-    if exit_stack:
-        await exit_stack.aclose()
-
-    if client:
-        await client.aio.aclose()
-
-    mcp_session = None
-    client = None
-    exit_stack = None
-
-
-async def ask(question: str) -> str:
-    if client is None or mcp_session is None:
-        raise RuntimeError("AI service är inte startad.")
-
-    response = await client.aio.models.generate_content(
-        model="gemini-3.5-flash-lite",
-        contents=question,
-        config={
-            "tools": [mcp_session]
-        },
-    )
-
-    return response.text
+def ask(question: str) -> str:
+    return asyncio.run(ask_async(question))

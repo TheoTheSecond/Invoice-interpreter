@@ -3,6 +3,7 @@ name = "invoice-ai-v0-1"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
+    "anthropic>=1.11.0",
     "fastapi>=0.142.2",
     "google-genai==2.28.0",
     "jinja2>=3.1.6",

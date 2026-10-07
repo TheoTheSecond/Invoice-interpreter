@@ -10,26 +10,17 @@ from dotenv import load_dotenv
 
 from database import create_db, get_session
 from models import Invoice, InvoiceLine
+from ai_service import ask_async
 from xml_parser import parse_invoice
-from ai_service import ask, startup, shutdown
 
 
 load_dotenv()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await startup()
-
-    try:
-        yield
-    finally:
-        await shutdown()
 
 
 app = FastAPI(
     title="Invoice AI v0.1",
-    lifespan=lifespan
 )
 
 create_db()
@@ -184,5 +175,5 @@ class Question(BaseModel):
 @app.post("/api/ask")
 async def ai(question: Question):
     return {
-        "answer": await ask(question.question)
+        "answer": await ask_async(question.question)
     }
