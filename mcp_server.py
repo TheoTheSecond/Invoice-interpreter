@@ -259,6 +259,7 @@ def get_invoice_summary() -> dict:
                 "currency": cheapest.currency,
             } if cheapest else None,
         }
+
 if __name__ == "__main__":
     mcp.run()
 
