@@ -19,11 +19,12 @@ mcp = MCPServer("Invoice database")
 
 
 
-"""
-Search invoices by filename, supplier or invoice number.
-"""
+
 @mcp.tool()
 def search_invoices(query: str) -> list[dict]:
+    """
+    Search invoice HEADER information only.
+    """
     log_tool(
         f"search_invoices(query={query})"
     )
@@ -116,6 +117,63 @@ def get_supplier_total(supplier: str) -> dict:
             )
         }
 
+@mcp.tool()
+def search_invoice_lines(query: str) -> list[dict]:
+    """
+   Search the CONTENTS of invoices.
+   """
+    log_tool(
+        f"search_invoice_lines(query={query})"
+    )
+
+    q = query.lower()
+
+    with Session(engine) as session:
+        lines = session.exec(
+            select(InvoiceLine)
+        ).all()
+
+        matches = []
+
+        for line in lines:
+            searchable_text = " ".join(
+                filter(
+                    None,
+                    [
+                        line.description,
+                        line.seller_item_id
+                    ]
+                )
+            ).lower()
+
+            if q in searchable_text:
+                invoice = session.get(
+                    Invoice,
+                    line.invoice_id
+                )
+
+                matches.append({
+                    "invoice_id": line.invoice_id,
+                    "invoice_number": (
+                        invoice.invoice_number
+                        if invoice else None
+                    ),
+                    "supplier": (
+                        invoice.supplier
+                        if invoice else None
+                    ),
+                    "description": line.description,
+                    "seller_item_id": line.seller_item_id,
+                    "quantity": line.quantity,
+                    "unit": line.unit,
+                    "unit_price": line.unit_price,
+                    "line_total": line.line_total
+                })
+
+        return matches
+
 
 if __name__ == "__main__":
     mcp.run()
+
+
