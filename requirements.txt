@@ -4,5 +4,5 @@ sqlmodel
 python-multipart
 jinja2
 mcp>=2,<3
-openai
+google-genai==2.28.0
 python-dotenv
