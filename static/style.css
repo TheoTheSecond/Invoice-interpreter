@@ -1,13 +1,15 @@
 * {
-    box-sizing: border-box
+    box-sizing: border-box;
 }
+
 
 body {
     font-family: Arial, sans-serif;
     background: #f5f6f8;
     margin: 0;
-    color: #20242a
+    color: #20242a;
 }
+
 
 main {
     max-width: 1050px;
@@ -15,128 +17,248 @@ main {
     background: white;
     border: 1px solid #ddd;
     border-radius: 10px;
-    overflow: hidden
+    overflow: hidden;
 }
+
+
+/* Header */
 
 header {
     padding: 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-bottom: 1px solid #ddd
+    border-bottom: 1px solid #ddd;
 }
 
+
 h1 {
-    margin: 0
+    margin: 0;
 }
+
 
 small {
     font-size: 14px;
-    color: #777
+    color: #777;
 }
 
-.upload, button {
+
+.upload,
+button {
     background: #20242a;
     color: white;
     padding: 10px 14px;
     border-radius: 6px;
-    cursor: pointer
+    cursor: pointer;
 }
 
+
 .upload input {
-    display: none
+    display: none;
 }
+
+
+/* Fakturor */
 
 .grid {
     display: grid;
-    grid-template-columns:320px 1fr;
-    min-height: 430px
+    grid-template-columns: 320px 1fr;
+    min-height: 430px;
 }
+
 
 aside {
     padding: 16px;
-    border-right: 1px solid #ddd
+    border-right: 1px solid #ddd;
 }
+
 
 input {
     width: 100%;
     padding: 11px;
     border: 1px solid #ccc;
-    border-radius: 6px
+    border-radius: 6px;
 }
+
 
 #list {
     height: 360px;
     overflow-y: auto;
-    margin-top: 12px
+    margin-top: 12px;
 }
+
 
 .item {
     padding: 11px;
     border-bottom: 1px solid #eee;
-    cursor: pointer
+    cursor: pointer;
 }
+
 
 .item:hover {
-    background: #f2f2f2
+    background: #f2f2f2;
 }
 
-.item b, .item span {
-    display: block
+
+.item b,
+.item span {
+    display: block;
 }
+
 
 .item span {
     font-size: 13px;
     color: #666;
-    margin-top: 4px
+    margin-top: 4px;
 }
 
+
 article {
-    padding: 24px
+    padding: 24px;
 }
+
+
+/* Fakturatabell */
 
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 20px
+    margin-top: 20px;
 }
 
-td, th {
+
+td,
+th {
     text-align: left;
     padding: 8px;
-    border-bottom: 1px solid #eee
+    border-bottom: 1px solid #eee;
 }
+
+
+/* AI-chat */
 
 .chat {
     border-top: 1px solid #ddd;
-    padding: 20px
+    padding: 20px;
+    background: white;
 }
+
+
+.chat h2 {
+    margin-top: 0;
+    margin-bottom: 16px;
+}
+
+
+#messages {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    min-height: 140px;
+    max-height: 450px;
+
+    overflow-y: auto;
+
+    padding: 16px;
+    margin-bottom: 16px;
+
+    background: #f5f6f8;
+    border: 1px solid #eee;
+    border-radius: 10px;
+}
+
+
+.chat-placeholder {
+    margin: auto;
+    color: #888;
+    font-size: 14px;
+}
+
+
+.message {
+    width: fit-content;
+    max-width: 72%;
+
+    padding: 10px 14px;
+
+    line-height: 1.45;
+
+    border-radius: 16px;
+
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+
+
+/* Användarens meddelande */
+
+.message.user {
+    align-self: flex-end;
+
+    background: #20242a;
+    color: white;
+
+    border-bottom-right-radius: 4px;
+}
+
+
+/* AI-meddelande */
+
+.message.ai {
+    align-self: flex-start;
+
+    background: white;
+    color: #20242a;
+
+    border: 1px solid #ddd;
+
+    border-bottom-left-radius: 4px;
+}
+
+
+/* Frågefält */
 
 .ask {
     display: flex;
-    gap: 8px
+    gap: 8px;
 }
+
+
+.ask input {
+    flex: 1;
+}
+
 
 .ask button {
-    border: 0
+    border: 0;
+    flex-shrink: 0;
 }
 
-pre {
-    white-space: pre-wrap;
-    font-family: inherit;
-    background: #f7f7f7;
-    padding: 14px;
-    border-radius: 6px;
-    min-height: 45px
-}
+
+/* Mobil */
 
 @media (max-width: 700px) {
-    .grid {
-        grid-template-columns:1fr
+
+    main {
+        margin: 0;
+        border-radius: 0;
     }
+
+
+    .grid {
+        grid-template-columns: 1fr;
+    }
+
 
     aside {
         border-right: 0;
-        border-bottom: 1px solid #ddd
+        border-bottom: 1px solid #ddd;
     }
+
+
+    .message {
+        max-width: 85%;
+    }
+
 }

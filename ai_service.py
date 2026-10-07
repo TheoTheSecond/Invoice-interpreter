@@ -1,17 +1,24 @@
-import asyncio
 import os
 import sys
+from contextlib import AsyncExitStack
 
 from google import genai
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
-async def ask_async(question: str) -> str:
+client = None
+mcp_session = None
+exit_stack = None
+
+
+async def startup():
+    global client, mcp_session, exit_stack
+
     api_key = os.getenv("GEMINI_API_KEY")
 
     if not api_key:
-        return "GEMINI_API_KEY saknas."
+        raise RuntimeError("GEMINI_API_KEY saknas.")
 
     client = genai.Client(api_key=api_key)
 
@@ -20,25 +27,43 @@ async def ask_async(question: str) -> str:
         args=["mcp_server.py"],
     )
 
-    try:
-        async with stdio_client(server_params) as (read, write):
-            async with ClientSession(read, write) as session:
+    exit_stack = AsyncExitStack()
 
-                await session.initialize()
+    read, write = await exit_stack.enter_async_context(
+        stdio_client(server_params)
+    )
 
-                response = await client.aio.models.generate_content(
-                    model="gemini-3.5-flash-lite",
-                    contents=question,
-                    config={
-                        "tools": [session]
-                    },
-                )
+    mcp_session = await exit_stack.enter_async_context(
+        ClientSession(read, write)
+    )
 
-                return response.text
+    await mcp_session.initialize()
 
-    finally:
+
+async def shutdown():
+    global client, mcp_session, exit_stack
+
+    if exit_stack:
+        await exit_stack.aclose()
+
+    if client:
         await client.aio.aclose()
 
+    mcp_session = None
+    client = None
+    exit_stack = None
 
-def ask(question: str) -> str:
-    return asyncio.run(ask_async(question))
+
+async def ask(question: str) -> str:
+    if client is None or mcp_session is None:
+        raise RuntimeError("AI service är inte startad.")
+
+    response = await client.aio.models.generate_content(
+        model="gemini-3.5-flash-lite",
+        contents=question,
+        config={
+            "tools": [mcp_session]
+        },
+    )
+
+    return response.text

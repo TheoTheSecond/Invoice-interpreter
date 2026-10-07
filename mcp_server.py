@@ -1,177 +1,77 @@
-import sys
-
-from mcp.server import MCPServer
-from sqlmodel import Session, select
-
-from database import engine
-from models import Invoice, InvoiceLine
-
 from datetime import datetime
 
-def log_tool(message: str):
-    with open("mcp_debug.log", "a", encoding="utf-8") as file:
-        file.write(
-            f"{datetime.now()} - {message}\n"
-        )
+from mcp.server import MCPServer
+
+import invoice_repository as repository
+
 
 mcp = MCPServer("Invoice database")
 
 
-
+def log_tool(message: str):
+    with open("mcp_debug.log", "a", encoding="utf-8") as file:
+        file.write(f"{datetime.now()} - {message}\n")
 
 
 @mcp.tool()
 def search_invoices(query: str) -> list[dict]:
     """
     Search invoice HEADER information only.
+
+    Searches:
+    - filename
+    - supplier name
+    - invoice number
+
+    Do not use this tool to search for products, services,
+    purchases, article numbers or invoice line descriptions.
+    Use search_invoice_lines for those searches.
     """
-    log_tool(
-        f"search_invoices(query={query})"
-    )
-    q = query.lower()
+    log_tool(f"search_invoices(query={query})")
 
-    with Session(engine) as session:
-        invoices = session.exec(select(Invoice)).all()
-
-        matches = []
-
-        for invoice in invoices:
-            searchable_text = " ".join(
-                filter(
-                    None,
-                    [
-                        invoice.filename,
-                        invoice.supplier,
-                        invoice.invoice_number
-                    ]
-                )
-            ).lower()
-
-            if q in searchable_text:
-                matches.append({
-                    "id": invoice.id,
-                    "filename": invoice.filename,
-                    "supplier": invoice.supplier,
-                    "invoice_number": invoice.invoice_number,
-                    "total_amount": invoice.total_amount
-                })
-
-        return matches
+    return repository.search_invoices(query)
 
 
 @mcp.tool()
 def get_invoice(invoice_id: int) -> dict:
     """
-    Get one invoice and its invoice lines.
+    Get one invoice and all of its invoice lines.
+
+    Use this tool when the invoice ID is known and detailed
+    information about that invoice is needed.
     """
-    log_tool(
-        f"get_invoice(invoice_id={invoice_id})"
-    )
-    with Session(engine) as session:
-        invoice = session.get(Invoice, invoice_id)
+    log_tool(f"get_invoice(invoice_id={invoice_id})")
 
-        if not invoice:
-            return {
-                "error": "Invoice not found"
-            }
-
-        lines = session.exec(
-            select(InvoiceLine)
-            .where(InvoiceLine.invoice_id == invoice_id)
-            .order_by(InvoiceLine.id)
-        ).all()
-
-        return {
-            "invoice": invoice.model_dump(exclude={"raw_xml"}),
-            "lines": [
-                line.model_dump()
-                for line in lines
-            ]
-        }
+    return repository.get_invoice(invoice_id)
 
 
 @mcp.tool()
 def get_supplier_total(supplier: str) -> dict:
+    """
+    Get the number of invoices and total spending for a supplier.
 
-    log_tool(
-        f"get_supplier_total(supplier={supplier})"
-    )
-    with Session(engine) as session:
-        invoices = session.exec(
-            select(Invoice)
-        ).all()
+    Use this tool for questions about how many invoices there are
+    from a supplier or how much has been spent with that supplier.
+    """
+    log_tool(f"get_supplier_total(supplier={supplier})")
 
-        matches = [
-            invoice
-            for invoice in invoices
-            if invoice.supplier
-               and supplier.lower() in invoice.supplier.lower()
-        ]
+    return repository.get_supplier_total(supplier)
 
-        return {
-            "supplier": supplier,
-            "invoice_count": len(matches),
-            "total_amount": sum(
-                invoice.total_amount or 0
-                for invoice in matches
-            )
-        }
 
 @mcp.tool()
 def search_invoice_lines(query: str) -> list[dict]:
     """
-   Search the CONTENTS of invoices.
-   """
-    log_tool(
-        f"search_invoice_lines(query={query})"
-    )
+    Search the CONTENTS of invoices.
 
-    q = query.lower()
+    Use this tool to search for products, services, purchases,
+    article numbers and invoice line descriptions.
 
-    with Session(engine) as session:
-        lines = session.exec(
-            select(InvoiceLine)
-        ).all()
+    Use this when the user asks which invoices contain a
+    particular product or service.
+    """
+    log_tool(f"search_invoice_lines(query={query})")
 
-        matches = []
-
-        for line in lines:
-            searchable_text = " ".join(
-                filter(
-                    None,
-                    [
-                        line.description,
-                        line.seller_item_id
-                    ]
-                )
-            ).lower()
-
-            if q in searchable_text:
-                invoice = session.get(
-                    Invoice,
-                    line.invoice_id
-                )
-
-                matches.append({
-                    "invoice_id": line.invoice_id,
-                    "invoice_number": (
-                        invoice.invoice_number
-                        if invoice else None
-                    ),
-                    "supplier": (
-                        invoice.supplier
-                        if invoice else None
-                    ),
-                    "description": line.description,
-                    "seller_item_id": line.seller_item_id,
-                    "quantity": line.quantity,
-                    "unit": line.unit,
-                    "unit_price": line.unit_price,
-                    "line_total": line.line_total
-                })
-
-        return matches
-
+    return repository.search_invoice_lines(query)
 
 @mcp.tool()
 def get_invoice_summary() -> dict:
@@ -180,8 +80,8 @@ def get_invoice_summary() -> dict:
 
     Use this tool for questions about the entire invoice collection,
     such as:
-    - how many invoices there are
-    - total spending
+    - how many invoices there are in total
+    - total spending across all invoices
     - average invoice amount
     - the most expensive invoice
     - the cheapest invoice
@@ -191,76 +91,36 @@ def get_invoice_summary() -> dict:
     """
     log_tool("get_invoice_summary()")
 
-    with Session(engine) as session:
-        invoices = session.exec(select(Invoice)).all()
+    return repository.get_invoice_summary()
 
-        if not invoices:
-            return {
-                "invoice_count": 0,
-                "total_amount": 0,
-                "average_amount": 0,
-                "most_expensive_invoice": None,
-                "cheapest_invoice": None,
-            }
+@mcp.tool()
+def get_invoice_statistics() -> dict:
+    """
+    Get statistics about all invoices, including invoice count,
+    total spending and average invoice amount.
+    """
+    log_tool("get_invoice_statistics()")
 
-        invoices_with_amount = [
-            invoice
-            for invoice in invoices
-            if invoice.total_amount is not None
-        ]
+    return repository.get_invoice_statistics()
 
-        total_amount = sum(
-            invoice.total_amount
-            for invoice in invoices_with_amount
-        )
 
-        average_amount = (
-            total_amount / len(invoices_with_amount)
-            if invoices_with_amount
-            else 0
-        )
+@mcp.tool()
+def get_most_expensive_invoice() -> dict | None:
+    """
+    Get the invoice with the highest total amount.
+    """
+    log_tool("get_most_expensive_invoice()")
 
-        most_expensive = (
-            max(
-                invoices_with_amount,
-                key=lambda invoice: invoice.total_amount
-            )
-            if invoices_with_amount
-            else None
-        )
+    return repository.get_most_expensive_invoice()
 
-        cheapest = (
-            min(
-                invoices_with_amount,
-                key=lambda invoice: invoice.total_amount
-            )
-            if invoices_with_amount
-            else None
-        )
 
-        return {
-            "invoice_count": len(invoices),
-            "total_amount": total_amount,
-            "average_amount": average_amount,
-            "most_expensive_invoice": {
-                "id": most_expensive.id,
-                "filename": most_expensive.filename,
-                "invoice_number": most_expensive.invoice_number,
-                "supplier": most_expensive.supplier,
-                "total_amount": most_expensive.total_amount,
-                "currency": most_expensive.currency,
-            } if most_expensive else None,
-            "cheapest_invoice": {
-                "id": cheapest.id,
-                "filename": cheapest.filename,
-                "invoice_number": cheapest.invoice_number,
-                "supplier": cheapest.supplier,
-                "total_amount": cheapest.total_amount,
-                "currency": cheapest.currency,
-            } if cheapest else None,
-        }
+@mcp.tool()
+def get_cheapest_invoice() -> dict | None:
+    """
+    Get the invoice with the lowest total amount.
+    """
+    log_tool("get_cheapest_invoice()")
 
+    return repository.get_cheapest_invoice()
 if __name__ == "__main__":
     mcp.run()
-
-

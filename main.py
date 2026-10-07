@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
@@ -10,12 +11,27 @@ from dotenv import load_dotenv
 from database import create_db, get_session
 from models import Invoice, InvoiceLine
 from xml_parser import parse_invoice
-from ai_service import ask
+from ai_service import ask, startup, shutdown
 
 
 load_dotenv()
 
-app = FastAPI(title="Invoice AI v0.1")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await startup()
+
+    try:
+        yield
+    finally:
+        await shutdown()
+
+
+app = FastAPI(
+    title="Invoice AI v0.1",
+    lifespan=lifespan
+)
+
 create_db()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -28,8 +44,8 @@ def index():
 
 @app.post("/api/upload")
 async def upload(
-    files: list[UploadFile] = File(...),
-    session: Session = Depends(get_session),
+        files: list[UploadFile] = File(...),
+        session: Session = Depends(get_session),
 ):
     added = []
 
@@ -84,8 +100,8 @@ async def upload(
 
 @app.get("/api/invoices")
 def invoices(
-    q: str = "",
-    session: Session = Depends(get_session),
+        q: str = "",
+        session: Session = Depends(get_session),
 ):
     rows = session.exec(
         select(Invoice).order_by(Invoice.id.desc())
@@ -98,7 +114,7 @@ def invoices(
             invoice
             for invoice in rows
             if query
-            in " ".join(
+               in " ".join(
                 filter(
                     None,
                     [
@@ -119,8 +135,8 @@ def invoices(
 
 @app.get("/api/invoices/{invoice_id}")
 def invoice(
-    invoice_id: int,
-    session: Session = Depends(get_session),
+        invoice_id: int,
+        session: Session = Depends(get_session),
 ):
     invoice = session.get(Invoice, invoice_id)
 
@@ -141,13 +157,18 @@ def invoice(
         "lines": [line.model_dump() for line in lines],
     }
 
+
 @app.delete("/api/invoices")
-def delete_all_invoices(session: Session = Depends(get_session)):
+def delete_all_invoices(
+        session: Session = Depends(get_session)
+):
     lines = session.exec(select(InvoiceLine)).all()
+
     for line in lines:
         session.delete(line)
 
     invoices = session.exec(select(Invoice)).all()
+
     for invoice in invoices:
         session.delete(invoice)
 
@@ -155,10 +176,13 @@ def delete_all_invoices(session: Session = Depends(get_session)):
 
     return {"message": "Databasen är tömd"}
 
+
 class Question(BaseModel):
     question: str
 
 
 @app.post("/api/ask")
-def ai(question: Question):
-    return {"answer": ask(question.question)}
+async def ai(question: Question):
+    return {
+        "answer": await ask(question.question)
+    }
