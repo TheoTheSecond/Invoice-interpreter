@@ -20,20 +20,24 @@ async def ask_async(question: str) -> str:
         args=["mcp_server.py"],
     )
 
-    async with stdio_client(server_params) as (read, write):
-        async with ClientSession(read, write) as session:
+    try:
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
 
-            await session.initialize()
+                await session.initialize()
 
-            response = await client.aio.models.generate_content(
-                model="gemini-3.5-flash-lite",
-                contents=question,
-                config={
-                    "tools": [session]
-                },
-            )
+                response = await client.aio.models.generate_content(
+                    model="gemini-3.5-flash-lite",
+                    contents=question,
+                    config={
+                        "tools": [session]
+                    },
+                )
 
-            return response.text
+                return response.text
+
+    finally:
+        await client.aio.aclose()
 
 
 def ask(question: str) -> str:
