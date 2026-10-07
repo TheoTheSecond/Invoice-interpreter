@@ -58,11 +58,12 @@ def search_invoices(query: str) -> list[dict]:
 
         return matches
 
+
+@mcp.tool()
+def get_invoice(invoice_id: int) -> dict:
     """
     Get one invoice and its invoice lines.
     """
-@mcp.tool()
-def get_invoice(invoice_id: int) -> dict:
     log_tool(
         f"get_invoice(invoice_id={invoice_id})"
     )
@@ -88,11 +89,10 @@ def get_invoice(invoice_id: int) -> dict:
             ]
         }
 
-    """
-    Get invoice count and total amount for a supplier.
-    """
+
 @mcp.tool()
 def get_supplier_total(supplier: str) -> dict:
+
     log_tool(
         f"get_supplier_total(supplier={supplier})"
     )
@@ -172,6 +172,93 @@ def search_invoice_lines(query: str) -> list[dict]:
 
         return matches
 
+
+@mcp.tool()
+def get_invoice_summary() -> dict:
+    """
+    Get a summary of all invoices in the database.
+
+    Use this tool for questions about the entire invoice collection,
+    such as:
+    - how many invoices there are
+    - total spending
+    - average invoice amount
+    - the most expensive invoice
+    - the cheapest invoice
+
+    Do not use this tool when searching for a specific supplier,
+    invoice number, product or service.
+    """
+    log_tool("get_invoice_summary()")
+
+    with Session(engine) as session:
+        invoices = session.exec(select(Invoice)).all()
+
+        if not invoices:
+            return {
+                "invoice_count": 0,
+                "total_amount": 0,
+                "average_amount": 0,
+                "most_expensive_invoice": None,
+                "cheapest_invoice": None,
+            }
+
+        invoices_with_amount = [
+            invoice
+            for invoice in invoices
+            if invoice.total_amount is not None
+        ]
+
+        total_amount = sum(
+            invoice.total_amount
+            for invoice in invoices_with_amount
+        )
+
+        average_amount = (
+            total_amount / len(invoices_with_amount)
+            if invoices_with_amount
+            else 0
+        )
+
+        most_expensive = (
+            max(
+                invoices_with_amount,
+                key=lambda invoice: invoice.total_amount
+            )
+            if invoices_with_amount
+            else None
+        )
+
+        cheapest = (
+            min(
+                invoices_with_amount,
+                key=lambda invoice: invoice.total_amount
+            )
+            if invoices_with_amount
+            else None
+        )
+
+        return {
+            "invoice_count": len(invoices),
+            "total_amount": total_amount,
+            "average_amount": average_amount,
+            "most_expensive_invoice": {
+                "id": most_expensive.id,
+                "filename": most_expensive.filename,
+                "invoice_number": most_expensive.invoice_number,
+                "supplier": most_expensive.supplier,
+                "total_amount": most_expensive.total_amount,
+                "currency": most_expensive.currency,
+            } if most_expensive else None,
+            "cheapest_invoice": {
+                "id": cheapest.id,
+                "filename": cheapest.filename,
+                "invoice_number": cheapest.invoice_number,
+                "supplier": cheapest.supplier,
+                "total_amount": cheapest.total_amount,
+                "currency": cheapest.currency,
+            } if cheapest else None,
+        }
 
 if __name__ == "__main__":
     mcp.run()

@@ -91,7 +91,6 @@ async function show(id) {
         </td>
     </tr>
 `).join('')}
-
             <tr class="summary-row">
                 <td colspan="4">
                     <b>Summa exkl. moms</b>
@@ -119,27 +118,23 @@ async function show(id) {
         </table>
     `;
 }
-
 $('#files').onchange = async e => {
     let f = new FormData();
 
     [...e.target.files].forEach(
         x => f.append('files', x)
     );
-
     let r = await fetch('/api/upload', {
         method: 'POST',
         body: f
     });
-
     if (!r.ok) {
         alert((await r.json()).detail);
     }
-
     await load();
 };
 $('#search').oninput = load;
-$('#ask').onclick = async () => {
+async function askQuestion() {
     let q = $('#question').value.trim();
 
     if (!q) return;
@@ -157,7 +152,16 @@ $('#ask').onclick = async () => {
     }).then(r => r.json());
 
     $('#answer').textContent = r.answer;
-};
+}
+
+$('#ask').onclick = askQuestion;
+
+$('#question').addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        askQuestion();
+    }
+});
 //temporärt
 const clearButton = document.createElement('button');
 
